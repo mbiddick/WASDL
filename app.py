@@ -46,7 +46,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ADMIN_PASSWORD    = os.environ.get("ADMIN_PASSWORD", "debate2024")
 BOT_NAME          = os.environ.get("BOT_NAME", "Debate Assistant")
 KB_FILE           = os.environ.get("KB_FILE", "knowledge_base.json")
-MODEL             = "claude-3-haiku-20240307"   # fast & cost-effective
+MODEL             = "claude-haiku-4-5-20251001"   # fast & cost-effective
 
 # ── Knowledge-base helpers ────────────────────────────────────────────────────
 def load_kb() -> dict:
