@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 
+#!/usr/bin/env python3
 import io, json, os, re, uuid
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request
@@ -211,6 +211,38 @@ def search(query, chunks, top_k=6):
     scored.sort(key=lambda x: x[0], reverse=True)
     return [c for _, c in scored[:top_k]]
 
+def rerank_chunks(query, chunks, top_k=5):
+    """Use Claude to semantically rerank candidate chunks by relevance to the query."""
+    if not chunks or len(chunks) <= top_k:
+        return chunks
+    numbered = "\n\n".join(
+        "[{}] {}: {}".format(i, c["doc_name"], c["text"][:400])
+        for i, c in enumerate(chunks)
+    )
+    prompt = (
+        "A user asked: \"{}\"\n\n"
+        "Below are text chunks from a debate rulebook knowledge base. "
+        "Select the indices of the chunks that are relevant to answering the question. "
+        "Think about meaning, not just exact words — for example, "
+        "'record a speech' and 'audio/video recording' are the same topic. "
+        "Return ONLY a comma-separated list of index numbers (e.g. 0, 2, 4). "
+        "Select up to {} chunks. If none are relevant, return 'none'.\n\n{}"
+    ).format(query, top_k, numbered)
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=MODEL, max_tokens=50,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = response.content[0].text.strip()
+        if raw.lower() == "none":
+            return []
+        indices = [int(x.strip()) for x in re.findall(r"\d+", raw)]
+        indices = [i for i in indices if 0 <= i < len(chunks)][:top_k]
+        return [chunks[i] for i in indices]
+    except Exception:
+        return chunks[:top_k]
+
 @app.route("/")
 def index():
     return render_template("index.html", bot_name=BOT_NAME)
@@ -290,8 +322,9 @@ def chat():
         return jsonify({"error": "ANTHROPIC_API_KEY is not configured."}), 500
     data     = request.json or {}
     msgs     = data.get("messages", [])
-    user_msg = msgs[-1]["content"] if msgs else ""
-    relevant = search(user_msg, knowledge_base.get("chunks", []), top_k=6)
+    user_msg  = msgs[-1]["content"] if msgs else ""
+    candidates = search(user_msg, knowledge_base.get("chunks", []), top_k=15)
+    relevant   = rerank_chunks(user_msg, candidates, top_k=5)
     if relevant:
         context  = "\n\n---\n\n".join(
             "[Source: {}]\n{}".format(c["doc_name"], c["text"]) for c in relevant
