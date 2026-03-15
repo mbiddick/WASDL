@@ -328,16 +328,16 @@ def chat():
     user_msg   = msgs[-1]["content"] if msgs else ""
     all_chunks = knowledge_base.get("chunks", [])
 
-    # Step 1: keyword search for top matches
+    # Step 1: global keyword search for top matches
     candidates = search(user_msg, all_chunks, top_k=15)
     seen_ids   = {c["id"] for c in candidates}
 
-    # Step 2: ensure at least 2 chunks from every document are represented
-    # so no format's rulebook is silently excluded from the candidate pool
-    docs_represented = {c["doc_id"] for c in candidates}
-    all_docs = {c["doc_id"] for c in all_chunks}
-    for missing_doc in (all_docs - docs_represented):
-        doc_chunks = [c for c in all_chunks if c["doc_id"] == missing_doc]
+    # Step 2: for EVERY document, always add its top 2 best-matching chunks
+    # This guarantees the most relevant chunk from each rulebook is always
+    # in the pool — even if that doc is already partially represented globally
+    all_doc_ids = {c["doc_id"] for c in all_chunks}
+    for doc_id in all_doc_ids:
+        doc_chunks  = [c for c in all_chunks if c["doc_id"] == doc_id]
         top_for_doc = search(user_msg, doc_chunks, top_k=2)
         for c in top_for_doc:
             if c["id"] not in seen_ids:
