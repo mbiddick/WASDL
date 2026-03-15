@@ -14,8 +14,8 @@
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--light); color: #1f2937; min-height: 100vh; display: flex; flex-direction: column; }
 header { background: var(--navy); color: #fff; padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,.25); position: sticky; top: 0; z-index: 100; }
 .header-left { display: flex; align-items: center; gap: 12px; }
-.logo-icon { height: 44px; display: flex; align-items: center; }
-.logo-icon img { height: 44px; width: auto; object-fit: contain; filter: brightness(0) invert(1); }
+.logo-icon { height: 44px; display: flex; align-items: center; background: #fff; border-radius: 8px; padding: 4px 8px; }
+.logo-icon img { height: 36px; width: auto; object-fit: contain; }
 .brand h1 { font-size: 18px; font-weight: 700; }
 .brand p { font-size: 12px; opacity: .7; margin-top: 1px; }
 .header-right { display: flex; align-items: center; gap: 10px; }
@@ -173,8 +173,7 @@ input[type="password"]:focus { border-color: var(--navy2); }
     <div class="chat-messages" id="chat-messages">
       <div class="welcome-card" id="welcome-card">
         <div class="big-icon"><img src="/static/wasld-logo.png" alt="WASLD Logo" /></div>
-        <h2>{{ bot_name }}</h2>
-        <p>Your AI-powered resource for high school debate rules, procedures, and best practices. Answers come only from your uploaded knowledge base.</p>
+        <p>Your AI-powered resource for Washington Area Speech and Debate rules, procedures, and best practices for judges and coaches.</p>
         <div class="tips">
           <p><span class="tip-label">Try asking:</span></p>
           <p>What are PF speech times</p>
