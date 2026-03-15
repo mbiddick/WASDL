@@ -244,6 +244,25 @@ def search(query, chunks, top_k=6):
     scored.sort(key=lambda x: x[0], reverse=True)
     return [c for _, c in scored[:top_k]]
 
+def expand_query_with_claude(query):
+    """Use Claude to generate related search terms for better keyword retrieval."""
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=MODEL, max_tokens=120,
+            messages=[{"role": "user", "content": (
+                "You are helping search a debate rulebook. "
+                "Generate 8 related search terms for this query: \"{}\"\n"
+                "Include debate-specific synonyms, related rule concepts, and alternate "
+                "phrasings that might appear in a rulebook. "
+                "Return ONLY a comma-separated list of short terms, nothing else."
+            ).format(query)}]
+        )
+        raw = response.content[0].text.strip()
+        return [t.strip() for t in raw.split(",") if t.strip()]
+    except Exception:
+        return []
+
 def rerank_chunks(query, chunks, top_k=7):
     """Use Claude to semantically rerank candidate chunks by relevance to the query."""
     if not chunks or len(chunks) <= top_k:
@@ -361,17 +380,25 @@ def chat():
     user_msg   = msgs[-1]["content"] if msgs else ""
     all_chunks = knowledge_base.get("chunks", [])
 
-    # Step 1: global keyword search for top matches
+    # Step 1: expand query using Claude to generate related search terms
+    expanded_terms = expand_query_with_claude(user_msg)
+
+    # Step 2: global keyword search with original query + each expanded term
     candidates = search(user_msg, all_chunks, top_k=15)
     seen_ids   = {c["id"] for c in candidates}
+    for term in expanded_terms:
+        for c in search(term, all_chunks, top_k=5):
+            if c["id"] not in seen_ids:
+                candidates.append(c)
+                seen_ids.add(c["id"])
 
-    # Step 2: for EVERY document, always add its top 2 best-matching chunks
+    # Step 3: for EVERY document, always add its top 3 best-matching chunks
     # This guarantees the most relevant chunk from each rulebook is always
     # in the pool — even if that doc is already partially represented globally
     all_doc_ids = {c["doc_id"] for c in all_chunks}
     for doc_id in all_doc_ids:
         doc_chunks  = [c for c in all_chunks if c["doc_id"] == doc_id]
-        top_for_doc = search(user_msg, doc_chunks, top_k=2)
+        top_for_doc = search(user_msg, doc_chunks, top_k=3)
         for c in top_for_doc:
             if c["id"] not in seen_ids:
                 candidates.append(c)
