@@ -144,9 +144,13 @@ DEBATE_SYNONYMS = {
     # PF speech names
     "final focus":["ff","final speech","final focuses"],
     "ff":["final focus","final speech"],
-    "summary":["summary speech","sum"],
+    "summary":["summary speech","sum","second summary","first summary"],
+    "summary speech":["summary","pf summary","sum speech"],
     "grand crossfire":["grand cross","gcx"],
     "gcx":["grand crossfire","grand cross"],
+    "second rebuttal":["2nr","second neg rebuttal","final rebuttal"],
+    "first summary":["1s","opening summary"],
+    "second summary":["2s","closing summary"],
     # LD speech names
     "affirmative constructive":["1ac","ac","aff constructive"],
     "1ac":["affirmative constructive","ac"],
@@ -392,19 +396,26 @@ def chat():
                 candidates.append(c)
                 seen_ids.add(c["id"])
 
-    # Step 3: for EVERY document, always add its top 3 best-matching chunks
-    # This guarantees the most relevant chunk from each rulebook is always
-    # in the pool — even if that doc is already partially represented globally
+    # Step 3: for EVERY document, always add its top-matching chunks.
+    # Search with both the original query AND the top expanded terms so that
+    # vocabulary mismatches (e.g. "summary speech" vs "summary") are covered.
     all_doc_ids = {c["doc_id"] for c in all_chunks}
     for doc_id in all_doc_ids:
-        doc_chunks  = [c for c in all_chunks if c["doc_id"] == doc_id]
-        top_for_doc = search(user_msg, doc_chunks, top_k=3)
+        doc_chunks = [c for c in all_chunks if c["doc_id"] == doc_id]
+        top_for_doc = search(user_msg, doc_chunks, top_k=4)
+        seen_for_doc = {c["id"] for c in top_for_doc}
+        # Also search each expanded term against this document
+        for term in expanded_terms[:5]:
+            for c in search(term, doc_chunks, top_k=2):
+                if c["id"] not in seen_for_doc:
+                    top_for_doc.append(c)
+                    seen_for_doc.add(c["id"])
         for c in top_for_doc:
             if c["id"] not in seen_ids:
                 candidates.append(c)
                 seen_ids.add(c["id"])
 
-    relevant = rerank_chunks(user_msg, candidates, top_k=7)
+    relevant = rerank_chunks(user_msg, candidates, top_k=9)
 
     # Step 3: format-pinning — if the query mentions a specific debate format,
     # guarantee at least one chunk from a document matching that format is included.
