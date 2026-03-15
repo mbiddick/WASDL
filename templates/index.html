@@ -67,7 +67,8 @@ input[type="password"]:focus { border-color: var(--navy2); }
 .welcome-card h2 { font-size: 22px; color: var(--navy); margin-bottom: 8px; }
 .welcome-card p { font-size: 14px; color: var(--gray); line-height: 1.6; }
 .tips { margin-top: 20px; text-align: left; background: var(--light); border-radius: 8px; padding: 14px 16px; }
-.tips p { font-size: 13px; margin-bottom: 4px; color: var(--gray); }
+.tips p { font-size: 13px; margin-bottom: 10px; color: var(--gray); }
+.tips p:last-child { margin-bottom: 0; }
 .tip-label { font-weight: 700; color: var(--navy); }
 .message { display: flex; gap: 10px; align-items: flex-start; max-width: 800px; }
 .message.user { flex-direction: row-reverse; margin-left: auto; }
@@ -113,7 +114,7 @@ input[type="password"]:focus { border-color: var(--navy2); }
 
 <header>
   <div class="header-left">
-    <div class="logo-icon"><img src="/static/wasld-logo.png" alt="WASLD Logo" /></div>
+    <a href="https://www.wasdl.org" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;text-decoration:none;"><div class="logo-icon"><img src="/static/wasld-logo.png" alt="WASLD Logo" /></div></a>
     <div class="brand">
       <h1 id="bot-name-header">{{ bot_name }}</h1>
       <p>AI Knowledge Base &middot; Coaches &amp; Judges</p>
@@ -191,7 +192,6 @@ input[type="password"]:focus { border-color: var(--navy2); }
           <p>What happens if policy debaters are 15 minutes late to a round?</p>
           <p>Can I provide debaters verbal feedback after the round is done, as a judge?</p>
           <p>Can debaters record speeches during the round?</p>
-          <p>Are counterplans allowed in LD debates?</p>
         </div>
       </div>
     </div>
