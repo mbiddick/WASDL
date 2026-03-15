@@ -211,7 +211,7 @@ def search(query, chunks, top_k=6):
     scored.sort(key=lambda x: x[0], reverse=True)
     return [c for _, c in scored[:top_k]]
 
-def rerank_chunks(query, chunks, top_k=5):
+def rerank_chunks(query, chunks, top_k=7):
     """Use Claude to semantically rerank candidate chunks by relevance to the query."""
     if not chunks or len(chunks) <= top_k:
         return chunks
@@ -225,6 +225,9 @@ def rerank_chunks(query, chunks, top_k=5):
         "Select the indices of the chunks that are relevant to answering the question. "
         "Think about meaning, not just exact words — for example, "
         "'record a speech' and 'audio/video recording' are the same topic. "
+        "IMPORTANT: If chunks from different documents address the same topic differently "
+        "(e.g. one format allows something, another prohibits it), include chunks from ALL "
+        "relevant documents so the answer can cover every format. "
         "Return ONLY a comma-separated list of index numbers (e.g. 0, 2, 4). "
         "Select up to {} chunks. If none are relevant, return 'none'.\n\n{}"
     ).format(query, top_k, numbered)
@@ -322,9 +325,26 @@ def chat():
         return jsonify({"error": "ANTHROPIC_API_KEY is not configured."}), 500
     data     = request.json or {}
     msgs     = data.get("messages", [])
-    user_msg  = msgs[-1]["content"] if msgs else ""
-    candidates = search(user_msg, knowledge_base.get("chunks", []), top_k=15)
-    relevant   = rerank_chunks(user_msg, candidates, top_k=5)
+    user_msg   = msgs[-1]["content"] if msgs else ""
+    all_chunks = knowledge_base.get("chunks", [])
+
+    # Step 1: keyword search for top matches
+    candidates = search(user_msg, all_chunks, top_k=15)
+    seen_ids   = {c["id"] for c in candidates}
+
+    # Step 2: ensure at least 2 chunks from every document are represented
+    # so no format's rulebook is silently excluded from the candidate pool
+    docs_represented = {c["doc_id"] for c in candidates}
+    all_docs = {c["doc_id"] for c in all_chunks}
+    for missing_doc in (all_docs - docs_represented):
+        doc_chunks = [c for c in all_chunks if c["doc_id"] == missing_doc]
+        top_for_doc = search(user_msg, doc_chunks, top_k=2)
+        for c in top_for_doc:
+            if c["id"] not in seen_ids:
+                candidates.append(c)
+                seen_ids.add(c["id"])
+
+    relevant = rerank_chunks(user_msg, candidates, top_k=7)
     if relevant:
         context  = "\n\n---\n\n".join(
             "[Source: {}]\n{}".format(c["doc_name"], c["text"]) for c in relevant
