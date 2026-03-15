@@ -60,7 +60,7 @@ input[type="password"]:focus { border-color: var(--navy2); }
 .alert-success { background: #dcfce7; color: var(--green); border: 1px solid #bbf7d0; }
 .alert-error { background: #fee2e2; color: var(--red); border: 1px solid #fecaca; }
 .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.chat-messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
 .welcome-card { max-width: 520px; margin: 20px auto; background: #fff; border-radius: var(--radius); padding: 32px; text-align: center; box-shadow: 0 4px 24px rgba(26,39,68,.12); border: 1px solid var(--border); }
 .welcome-card .big-icon { margin-bottom: 16px; display: flex; justify-content: center; }
 .welcome-card .big-icon img { height: 80px; width: auto; object-fit: contain; }
@@ -498,7 +498,12 @@ function addTyping(id) {
 
 function scrollToBottom() {
   var c = document.getElementById("chat-messages");
-  setTimeout(function() { c.scrollTop = c.scrollHeight; }, 50);
+  // Scroll immediately, then again after layout settles (handles markdown/dynamic content)
+  c.scrollTop = c.scrollHeight;
+  requestAnimationFrame(function() {
+    c.scrollTop = c.scrollHeight;
+    setTimeout(function() { c.scrollTop = c.scrollHeight; }, 120);
+  });
 }
 
 function removeEl(id) { var el = document.getElementById(id); if (el) el.remove(); }
