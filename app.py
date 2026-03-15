@@ -141,6 +141,39 @@ DEBATE_SYNONYMS = {
     "res":["resolution","topic"],
     "prep time":["prep","preparation time"],
     "prep":["prep time","preparation time"],
+    # PF speech names
+    "final focus":["ff","final speech","final focuses"],
+    "ff":["final focus","final speech"],
+    "summary":["summary speech","sum"],
+    "grand crossfire":["grand cross","gcx"],
+    "gcx":["grand crossfire","grand cross"],
+    # LD speech names
+    "affirmative constructive":["1ac","ac","aff constructive"],
+    "1ac":["affirmative constructive","ac"],
+    "negative constructive":["nc","1nc","neg constructive"],
+    "nc":["negative constructive","1nc"],
+    "negative rebuttal":["nr","2nr"],
+    "affirmative rebuttal":["ar","2ar","1ar"],
+    "2ar":["affirmative rebuttal","final rebuttal"],
+    # Policy speech names
+    "1nc":["first negative constructive","negative constructive"],
+    "2nc":["second negative constructive"],
+    "1ac":["first affirmative constructive","affirmative constructive"],
+    "2ac":["second affirmative constructive"],
+    "2nr":["second negative rebuttal","negative rebuttal"],
+    "2ar":["second affirmative rebuttal","affirmative rebuttal"],
+    # General
+    "new argument":["new args","new arguments","new constructive"],
+    "final speech":["final focus","last speech","closing speech"],
+    "constructive":["constructive speech","constructives"],
+    "extension":["extend","extending","extensions"],
+    "forfeit":["forfeiture","default","no show"],
+    "late":["tardy","absence","missing"],
+    "disqualification":["dq","disqualify","disqualified"],
+    "judge":["judges","judging","adjudicator"],
+    "feedback":["oral critique","critique","comments","verbal feedback"],
+    "pairing":["pairings","bracket","matchup"],
+    "bye":["automatic win","free round"],
 }
 
 def normalize_text(text):
