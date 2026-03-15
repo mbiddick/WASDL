@@ -58,7 +58,9 @@ def extract_docx(file_bytes):
 def extract_txt(file_bytes):
     return file_bytes.decode("utf-8", errors="replace")
 
-def chunk_text(text, chunk_size=500, overlap=60):
+MAX_CHUNKS_PER_DOC = 60  # hard cap per document to keep RAM in check
+
+def chunk_text(text, chunk_size=300, overlap=40):
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r" {2,}", " ", text)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
@@ -81,7 +83,12 @@ def chunk_text(text, chunk_size=500, overlap=60):
                 current = words
     if current:
         chunks.append(" ".join(current))
-    return [c for c in chunks if len(c.split()) >= 10]
+    chunks = [c for c in chunks if len(c.split()) >= 10]
+    # Cap chunks per document — evenly spaced to preserve coverage
+    if len(chunks) > MAX_CHUNKS_PER_DOC:
+        step = len(chunks) / MAX_CHUNKS_PER_DOC
+        chunks = [chunks[int(i * step)] for i in range(MAX_CHUNKS_PER_DOC)]
+    return chunks
 
 STOP_WORDS = {
     "the","a","an","is","are","was","were","be","been","being","have","has",
@@ -405,7 +412,7 @@ def chat():
         top_for_doc = search(user_msg, doc_chunks, top_k=4)
         seen_for_doc = {c["id"] for c in top_for_doc}
         # Also search each expanded term against this document
-        for term in expanded_terms[:5]:
+        for term in expanded_terms[:3]:
             for c in search(term, doc_chunks, top_k=2):
                 if c["id"] not in seen_for_doc:
                     top_for_doc.append(c)
@@ -417,9 +424,11 @@ def chat():
 
     relevant = rerank_chunks(user_msg, candidates, top_k=9)
 
-    # Step 3: format-pinning — if the query mentions a specific debate format,
-    # guarantee at least one chunk from a document matching that format is included.
-    # This prevents the reranker from silently dropping the relevant format's rules.
+    # Format-pinning — for each format mentioned in the query, guarantee one chunk
+    # from EVERY document whose name matches that format.  This prevents a situation
+    # where doc A (e.g. judge_instructions) satisfies the "PF covered" check while
+    # doc B (e.g. PF_and_LD_GUIDANCE) — which may actually contain the answer — is
+    # silently dropped by the reranker.
     FORMAT_KEYWORDS = {
         "policy":        ["policy"],
         "public forum":  ["public forum", "pf"],
@@ -429,24 +438,27 @@ def chat():
         "congressional": ["congressional", "congress"],
         "congress":      ["congressional", "congress"],
         "speech":        ["speech"],
+        "tabroom":       ["tabroom"],
     }
     q_lower = user_msg.lower()
     pinned_formats = [kws for trigger, kws in FORMAT_KEYWORDS.items() if trigger in q_lower]
     if pinned_formats:
         relevant_ids = {c["id"] for c in relevant}
         for fmt_keywords in pinned_formats:
-            # check if any relevant chunk already covers this format
-            already_covered = any(
-                any(kw in c["doc_name"].lower() or kw in c["text"].lower() for kw in fmt_keywords)
-                for c in relevant
-            )
-            if not already_covered:
-                # find the best matching chunk from candidates that covers this format
+            # Find every document whose name matches this format
+            fmt_doc_ids = {
+                c["doc_id"] for c in all_chunks
+                if any(kw in c["doc_name"].lower() for kw in fmt_keywords)
+            }
+            # Find which of those docs are already represented in relevant
+            covered_doc_ids = {
+                c["doc_id"] for c in relevant
+                if any(kw in c["doc_name"].lower() for kw in fmt_keywords)
+            }
+            # For each matching doc not yet represented, add its best candidate chunk
+            for doc_id in fmt_doc_ids - covered_doc_ids:
                 for c in candidates:
-                    if c["id"] not in relevant_ids and any(
-                        kw in c["doc_name"].lower() or kw in c["text"].lower()
-                        for kw in fmt_keywords
-                    ):
+                    if c["id"] not in relevant_ids and c["doc_id"] == doc_id:
                         relevant.append(c)
                         relevant_ids.add(c["id"])
                         break
