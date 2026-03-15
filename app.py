@@ -342,7 +342,12 @@ def chat():
         "Please consult your coach or the official rulebook.\"\n"
         "3. NEVER invent facts, rules, or examples not in the context.\n"
         "4. Mention which source document your answer comes from.\n"
-        "5. Be concise and clear for coaches and judges.\n\n"
+        "5. Be concise and clear for coaches and judges.\n"
+        "6. DEBATE FORMAT RULE: Debate rules often differ by format (Policy, Public Forum, "
+        "Lincoln-Douglas, Congressional, etc.). If the user's question does not specify a "
+        "format, you MUST check the context for each format and address them separately. "
+        "Never give an answer that applies to only one format without noting that other "
+        "formats may differ. If the context only covers some formats, say so.\n\n"
         "KNOWLEDGE BASE CONTEXT:\n{context}\n\n{note}"
     ).format(name=BOT_NAME, context=context, note=ctx_note)
     try:
