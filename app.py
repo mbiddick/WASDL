@@ -284,15 +284,24 @@ def rerank_chunks(query, chunks, top_k=7):
     )
     prompt = (
         "A user asked: \"{}\"\n\n"
-        "Below are text chunks from a debate rulebook knowledge base. "
-        "Select the indices of the chunks that are relevant to answering the question. "
-        "Think about meaning, not just exact words — for example, "
-        "'record a speech' and 'audio/video recording' are the same topic. "
-        "IMPORTANT: If chunks from different documents address the same topic differently "
-        "(e.g. one format allows something, another prohibits it), include chunks from ALL "
-        "relevant documents so the answer can cover every format. "
+        "Below are numbered text chunks from a debate rulebook knowledge base. "
+        "Your job is to select the chunks that would best help answer the question.\n\n"
+        "SELECTION RULES:\n"
+        "1. Prioritize chunks that DIRECTLY ANSWER the question — a chunk that states "
+        "the rule or gives the specific answer scores higher than one that merely mentions "
+        "the same topic in passing.\n"
+        "2. Match on MEANING, not just keywords — e.g. 'record a speech' and "
+        "'audio/video recording during a round' are the same topic.\n"
+        "3. A guidance or overview document may contain the actual rule even if a "
+        "format-specific document with the same format name is already selected — "
+        "include BOTH if each contributes something to the answer.\n"
+        "4. If chunks from different documents address the same question differently "
+        "(e.g. one format allows something, another prohibits it), include chunks from "
+        "ALL those documents.\n"
+        "5. Do NOT prefer a chunk just because its filename matches the format in the "
+        "question — prefer the chunk that actually states the rule.\n\n"
         "Return ONLY a comma-separated list of index numbers (e.g. 0, 2, 4). "
-        "Select up to {} chunks. If none are relevant, return 'none'.\n\n{}"
+        "Select up to {} chunks. If none directly help answer the question, return 'none'.\n\n{}"
     ).format(query, top_k, numbered)
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -403,9 +412,11 @@ def chat():
                 candidates.append(c)
                 seen_ids.add(c["id"])
 
-    # Step 3: for EVERY document, always add its top-matching chunks.
-    # Search with both the original query AND the top expanded terms so that
-    # vocabulary mismatches (e.g. "summary speech" vs "summary") are covered.
+    # Step 3: for EVERY document, guarantee its top-matching chunks are in the pool.
+    # Search with both the original query AND expanded terms so vocabulary mismatches
+    # (e.g. "summary speech" vs "summary") are covered.
+    # Also guarantees every document contributes at least its #1 chunk — this ensures
+    # guidance/overview docs are never silently excluded before the reranker runs.
     all_doc_ids = {c["doc_id"] for c in all_chunks}
     for doc_id in all_doc_ids:
         doc_chunks = [c for c in all_chunks if c["doc_id"] == doc_id]
@@ -417,6 +428,10 @@ def chat():
                 if c["id"] not in seen_for_doc:
                     top_for_doc.append(c)
                     seen_for_doc.add(c["id"])
+        # Safety net: if keyword search scored nothing for this doc, still include
+        # its very first chunk so the reranker at least sees something from it.
+        if not top_for_doc and doc_chunks:
+            top_for_doc = [doc_chunks[0]]
         for c in top_for_doc:
             if c["id"] not in seen_ids:
                 candidates.append(c)
@@ -483,9 +498,17 @@ def chat():
         "5. Be concise and clear for coaches and judges.\n"
         "6. DEBATE FORMAT RULE: Debate rules often differ by format (Policy, Public Forum, "
         "Lincoln-Douglas, Congressional, etc.). If the user's question does not specify a "
-        "format, you MUST check the context for each format and address them separately. "
+        "format, check the context for each format and address them separately. "
         "Never give an answer that applies to only one format without noting that other "
-        "formats may differ. If the context only covers some formats, say so.\n\n"
+        "formats may differ. If the context only covers some formats, say so.\n"
+        "7. GUIDANCE DOCUMENTS: The knowledge base includes both format-specific rule documents "
+        "AND general guidance/overview documents (e.g. PF_and_LD_GUIDANCE, judge_instructions). "
+        "Guidance documents often contain the actual rule being asked about. "
+        "ALWAYS scan ALL provided context chunks before concluding an answer is not available — "
+        "the answer may be in a guidance document rather than a format-named rulebook.\n"
+        "8. NEGATIVE RULES COUNT: If the context states that something is NOT permitted, "
+        "NOT used, or does NOT apply in a given format, that IS a complete answer — "
+        "state it clearly rather than saying the information is unavailable.\n\n"
         "KNOWLEDGE BASE CONTEXT:\n{context}\n\n{note}"
     ).format(name=BOT_NAME, context=context, note=ctx_note)
     try:
