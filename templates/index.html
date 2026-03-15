@@ -97,6 +97,11 @@ input[type="password"]:focus { border-color: var(--navy2); }
 .input-hint { font-size: 11px; color: var(--gray); margin-top: 6px; text-align: center; }
 .no-kb-banner { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #92400e; margin: 12px 20px 0; }
 .no-kb-banner.hidden { display: none; }
+.format-bar { display: flex; align-items: center; gap: 8px; padding: 10px 20px 0; flex-wrap: wrap; }
+.format-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--gray); margin-right: 2px; }
+.format-pill { background: var(--light); border: 1.5px solid var(--border); color: var(--gray); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; user-select: none; }
+.format-pill:hover { border-color: var(--navy2); color: var(--navy2); }
+.format-pill.active { background: var(--navy); border-color: var(--navy); color: #fff; }
 .bubble h1,.bubble h2,.bubble h3 { font-size: 15px; font-weight: 700; margin: 10px 0 4px; color: #1a2744; }
 .bubble p { margin: 0 0 8px; }
 .bubble p:last-child { margin-bottom: 0; }
@@ -196,6 +201,14 @@ input[type="password"]:focus { border-color: var(--navy2); }
       </div>
     </div>
 
+    <div class="format-bar">
+      <span class="format-label">Format:</span>
+      <span class="format-pill" onclick="selectFormat(this)" data-format="in Policy debate">Policy</span>
+      <span class="format-pill" onclick="selectFormat(this)" data-format="in Public Forum debate">PF</span>
+      <span class="format-pill" onclick="selectFormat(this)" data-format="in Lincoln-Douglas debate">LD</span>
+      <span class="format-pill" onclick="selectFormat(this)" data-format="in Congressional debate">Congress</span>
+      <span class="format-pill" onclick="selectFormat(this)" data-format="in Speech events">Speech</span>
+    </div>
     <div class="input-bar">
       <div class="input-wrap">
         <textarea id="user-input" rows="1" placeholder="Ask a debate question..."></textarea>
@@ -211,6 +224,7 @@ input[type="password"]:focus { border-color: var(--navy2); }
 var messages = [];
 var adminPW = "";
 var adminUnlocked = false;
+var selectedFormat = "";
 
 // ── Init ──────────────────────────────────────────────────
 window.onload = function() {
@@ -372,11 +386,25 @@ function uploadFile(file, done) {
     });
 }
 
+// ── Format pills ──────────────────────────────────────────
+function selectFormat(el) {
+  var pills = document.querySelectorAll(".format-pill");
+  if (el.classList.contains("active")) {
+    el.classList.remove("active");
+    selectedFormat = "";
+  } else {
+    pills.forEach(function(p) { p.classList.remove("active"); });
+    el.classList.add("active");
+    selectedFormat = el.getAttribute("data-format");
+  }
+}
+
 // ── Chat ──────────────────────────────────────────────────
 function sendMessage() {
   var input = document.getElementById("user-input");
   var text = input.value.trim();
   if (!text) return;
+  if (selectedFormat) text = text + " " + selectedFormat;
 
   var welcome = document.getElementById("welcome-card");
   if (welcome) welcome.remove();
