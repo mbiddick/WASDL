@@ -378,6 +378,41 @@ def chat():
                 seen_ids.add(c["id"])
 
     relevant = rerank_chunks(user_msg, candidates, top_k=7)
+
+    # Step 3: format-pinning — if the query mentions a specific debate format,
+    # guarantee at least one chunk from a document matching that format is included.
+    # This prevents the reranker from silently dropping the relevant format's rules.
+    FORMAT_KEYWORDS = {
+        "policy":        ["policy"],
+        "public forum":  ["public forum", "pf"],
+        "pf":            ["public forum", "pf"],
+        "lincoln":       ["lincoln", "ld"],
+        "ld":            ["lincoln", "ld"],
+        "congressional": ["congressional", "congress"],
+        "congress":      ["congressional", "congress"],
+        "speech":        ["speech"],
+    }
+    q_lower = user_msg.lower()
+    pinned_formats = [kws for trigger, kws in FORMAT_KEYWORDS.items() if trigger in q_lower]
+    if pinned_formats:
+        relevant_ids = {c["id"] for c in relevant}
+        for fmt_keywords in pinned_formats:
+            # check if any relevant chunk already covers this format
+            already_covered = any(
+                any(kw in c["doc_name"].lower() or kw in c["text"].lower() for kw in fmt_keywords)
+                for c in relevant
+            )
+            if not already_covered:
+                # find the best matching chunk from candidates that covers this format
+                for c in candidates:
+                    if c["id"] not in relevant_ids and any(
+                        kw in c["doc_name"].lower() or kw in c["text"].lower()
+                        for kw in fmt_keywords
+                    ):
+                        relevant.append(c)
+                        relevant_ids.add(c["id"])
+                        break
+
     if relevant:
         context  = "\n\n---\n\n".join(
             "[Source: {}]\n{}".format(c["doc_name"], c["text"]) for c in relevant
