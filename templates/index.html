@@ -97,6 +97,23 @@ input[type="password"]:focus { border-color: var(--navy2); }
 .input-hint { font-size: 11px; color: var(--gray); margin-top: 6px; text-align: center; }
 .no-kb-banner { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #92400e; margin: 12px 20px 0; }
 .no-kb-banner.hidden { display: none; }
+.feedback-btns { display: flex; gap: 6px; margin-top: 8px; }
+.thumb-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 13px; cursor: pointer; color: var(--gray); transition: all .15s; }
+.thumb-btn:hover { border-color: var(--navy); color: var(--navy); }
+.thumb-btn.up-selected { background: #dcfce7; border-color: var(--green); color: var(--green); }
+.thumb-btn.down-selected { background: #fee2e2; border-color: var(--red); color: var(--red); }
+.thumb-btn.dimmed { opacity: .3; pointer-events: none; }
+.log-entry { background: var(--light); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+.log-entry-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.log-date { font-size: 11px; color: var(--gray); }
+.log-rating-badge { font-size: 14px; }
+.log-question { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.log-answer { font-size: 12px; color: var(--gray); line-height: 1.5; max-height: 48px; overflow: hidden; cursor: pointer; position: relative; }
+.log-answer.expanded { max-height: none; }
+.log-answer-toggle { font-size: 11px; color: var(--navy2); cursor: pointer; margin-top: 2px; display: inline-block; }
+.log-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.log-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.log-stat { font-size: 12px; color: var(--gray); flex: 1; }
 .format-bar { display: flex; flex-direction: column; gap: 6px; padding: 10px 20px 0; }
 .format-bar-label { font-size: 12px; color: var(--gray); }
 .format-bar-label strong { color: var(--navy); }
@@ -176,6 +193,16 @@ input[type="password"]:focus { border-color: var(--navy2); }
           <div class="doc-list" id="doc-list">
             <p class="no-docs">No documents uploaded yet.</p>
           </div>
+        </div>
+
+        <div>
+          <div class="section-title">Question Log</div>
+          <div class="log-actions">
+            <span class="log-stat" id="log-stat">—</span>
+            <button class="btn btn-sm" style="background:var(--light);border:1px solid var(--border);font-weight:600;" onclick="loadLog()">Refresh</button>
+            <button class="btn btn-danger btn-sm" onclick="clearLog()">Clear Log</button>
+          </div>
+          <div id="log-list"><p class="no-docs">Click Refresh to load the log.</p></div>
         </div>
 
         <button class="btn btn-danger btn-sm btn-block" onclick="signOut()">Sign Out</button>
@@ -297,6 +324,7 @@ function verifyAdmin() {
       var ac = document.getElementById("admin-content");
       ac.style.display = "flex";
       loadDocs();
+      loadLog();
     } else {
       showAlert("pw-error", "Incorrect password.");
     }
@@ -435,10 +463,10 @@ function sendMessage() {
   .then(function(d) {
     removeEl(tid);
     if (d.error) {
-      addMessage("bot", "Error: " + d.error, []);
+      addMessage("bot", "Error: " + d.error, [], null);
     } else {
       messages.push({ role: "assistant", content: d.response });
-      addMessage("bot", d.response, d.sources || []);
+      addMessage("bot", d.response, d.sources || [], d.log_id || null);
     }
     btn.disabled = false;
     input.focus();
@@ -450,7 +478,7 @@ function sendMessage() {
   });
 }
 
-function addMessage(role, text, sources) {
+function addMessage(role, text, sources, logId) {
   var c = document.getElementById("chat-messages");
   var wrap = document.createElement("div");
   wrap.className = "message " + role;
@@ -479,6 +507,23 @@ function addMessage(role, text, sources) {
     bub.appendChild(sd);
   }
 
+  // Thumbs up/down for bot messages
+  if (role === "bot" && logId) {
+    var fb = document.createElement("div");
+    fb.className = "feedback-btns";
+    var upBtn   = document.createElement("button");
+    upBtn.className   = "thumb-btn";
+    upBtn.textContent = "👍";
+    upBtn.onclick = function() { submitFeedback(logId, "up", upBtn, downBtn); };
+    var downBtn   = document.createElement("button");
+    downBtn.className   = "thumb-btn";
+    downBtn.textContent = "👎";
+    downBtn.onclick = function() { submitFeedback(logId, "down", upBtn, downBtn); };
+    fb.appendChild(upBtn);
+    fb.appendChild(downBtn);
+    bub.appendChild(fb);
+  }
+
   wrap.appendChild(av);
   wrap.appendChild(bub);
   c.appendChild(wrap);
@@ -489,7 +534,7 @@ function addTyping(id) {
   var c = document.getElementById("chat-messages");
   var wrap = document.createElement("div");
   wrap.className = "message bot"; wrap.id = id;
-  var av = document.createElement("div"); av.className = "avatar"; av.textContent = "\u2696";
+  var av = document.createElement("div"); av.className = "avatar"; av.textContent = "AI";
   var bub = document.createElement("div"); bub.className = "typing-bubble";
   bub.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
   wrap.appendChild(av); wrap.appendChild(bub);
@@ -511,6 +556,106 @@ function removeEl(id) { var el = document.getElementById(id); if (el) el.remove(
 
 function escHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ── Feedback ──────────────────────────────────────────────
+function submitFeedback(logId, rating, upBtn, downBtn) {
+  fetch("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: logId, rating: rating })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      upBtn.classList.remove("up-selected", "dimmed");
+      downBtn.classList.remove("down-selected", "dimmed");
+      if (rating === "up") {
+        upBtn.classList.add("up-selected");
+        downBtn.classList.add("dimmed");
+      } else {
+        downBtn.classList.add("down-selected");
+        upBtn.classList.add("dimmed");
+      }
+    }
+  })
+  .catch(function() {});
+}
+
+// ── Question Log ──────────────────────────────────────────
+function loadLog() {
+  if (!adminPW) return;
+  fetch("/api/feedback-log?password=" + encodeURIComponent(adminPW))
+    .then(function(r) { return r.json(); })
+    .then(function(entries) {
+      if (entries.error) { alert("Could not load log."); return; }
+      var stat = document.getElementById("log-stat");
+      var list = document.getElementById("log-list");
+      var total = entries.length;
+      var up   = entries.filter(function(e) { return e.rating === "up"; }).length;
+      var down = entries.filter(function(e) { return e.rating === "down"; }).length;
+      stat.textContent = total + " entries · 👍 " + up + " · 👎 " + down;
+      if (total === 0) {
+        list.innerHTML = '<p class="no-docs">No questions logged yet.</p>';
+        return;
+      }
+      var html = "";
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        var d = new Date(e.timestamp);
+        var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+        var ratingBadge = e.rating === "up" ? "👍" : e.rating === "down" ? "👎" : "<span style='color:#ccc'>—</span>";
+        var answerShort = escHtml((e.answer || "").substring(0, 120)) + (e.answer && e.answer.length > 120 ? "…" : "");
+        var srcChips = "";
+        if (e.sources && e.sources.length) {
+          var seen = {};
+          for (var s = 0; s < e.sources.length; s++) {
+            if (!seen[e.sources[s]]) {
+              seen[e.sources[s]] = true;
+              srcChips += '<span class="source-chip">' + escHtml(e.sources[s]) + '</span>';
+            }
+          }
+        }
+        html += '<div class="log-entry">'
+              + '<div class="log-entry-meta"><span class="log-date">' + dateStr + '</span><span class="log-rating-badge">' + ratingBadge + '</span></div>'
+              + '<div class="log-question">' + escHtml(e.question || "") + '</div>'
+              + '<div class="log-answer" id="la' + i + '">' + answerShort + '</div>'
+              + (e.answer && e.answer.length > 120 ? '<span class="log-answer-toggle" onclick="toggleAnswer(\'la' + i + '\',\'' + escHtml((e.answer||"").replace(/'/g,"\\'")).substring(0,2000) + '\',this)">Show more</span>' : '')
+              + (srcChips ? '<div class="log-chips">' + srcChips + '</div>' : '')
+              + '</div>';
+      }
+      list.innerHTML = html;
+    })
+    .catch(function() { alert("Error loading log."); });
+}
+
+function toggleAnswer(elId, fullText, btn) {
+  var el = document.getElementById(elId);
+  if (el.classList.contains("expanded")) {
+    el.innerHTML = escHtml(fullText.substring(0, 120)) + "…";
+    el.classList.remove("expanded");
+    btn.textContent = "Show more";
+  } else {
+    el.innerHTML = escHtml(fullText);
+    el.classList.add("expanded");
+    btn.textContent = "Show less";
+  }
+}
+
+function clearLog() {
+  if (!confirm("Clear all logged questions and feedback? This cannot be undone.")) return;
+  fetch("/api/feedback-log/clear", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: adminPW })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.success) {
+      document.getElementById("log-stat").textContent = "0 entries · 👍 0 · 👎 0";
+      document.getElementById("log-list").innerHTML = '<p class="no-docs">No questions logged yet.</p>';
+    }
+  });
 }
 
 function showAlert(id, msg) {
