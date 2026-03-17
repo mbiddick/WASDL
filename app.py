@@ -24,6 +24,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ADMIN_PASSWORD    = os.environ.get("ADMIN_PASSWORD", "debate2024")
 BOT_NAME          = os.environ.get("BOT_NAME", "Debate Assistant")
 KB_FILE           = os.environ.get("KB_FILE", "knowledge_base.json")
+FEEDBACK_FILE     = os.environ.get("FEEDBACK_FILE", "feedback_log.json")
 MODEL             = "claude-haiku-4-5-20251001"
 
 def load_kb():
@@ -36,7 +37,18 @@ def save_kb(kb):
     with open(KB_FILE, "w", encoding="utf-8") as f:
         json.dump(kb, f, indent=2, ensure_ascii=False)
 
+def load_feedback():
+    if os.path.exists(FEEDBACK_FILE):
+        with open(FEEDBACK_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"entries": []}
+
+def save_feedback(fb):
+    with open(FEEDBACK_FILE, "w", encoding="utf-8") as f:
+        json.dump(fb, f, indent=2, ensure_ascii=False)
+
 knowledge_base = load_kb()
+feedback_log   = load_feedback()
 
 def extract_pdf(file_bytes):
     if not HAS_FITZ:
@@ -517,12 +529,56 @@ def chat():
             model=MODEL, max_tokens=1024, system=system_prompt,
             messages=[{"role": m["role"], "content": m["content"]} for m in msgs],
         )
-        return jsonify({
-            "response": response.content[0].text,
-            "sources":  [c["doc_name"] for c in relevant],
+        answer  = response.content[0].text
+        sources = [c["doc_name"] for c in relevant]
+
+        # Log the question, answer, and sources
+        entry_id = str(uuid.uuid4())
+        feedback_log["entries"].append({
+            "id":        entry_id,
+            "timestamp": datetime.now().isoformat(),
+            "question":  user_msg,
+            "answer":    answer,
+            "sources":   sources,
+            "rating":    None,
         })
+        save_feedback(feedback_log)
+
+        return jsonify({"response": answer, "sources": sources, "log_id": entry_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/feedback", methods=["POST"])
+def submit_feedback():
+    data      = request.json or {}
+    entry_id  = data.get("id", "")
+    rating    = data.get("rating", "")
+    if not entry_id or rating not in ("up", "down"):
+        return jsonify({"error": "Invalid request"}), 400
+    for entry in feedback_log["entries"]:
+        if entry["id"] == entry_id:
+            entry["rating"] = rating
+            save_feedback(feedback_log)
+            return jsonify({"success": True})
+    return jsonify({"error": "Entry not found"}), 404
+
+@app.route("/api/feedback-log")
+def get_feedback_log():
+    pw = request.args.get("password", "")
+    if pw != ADMIN_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 403
+    entries = feedback_log.get("entries", [])
+    return jsonify(list(reversed(entries)))   # newest first
+
+@app.route("/api/feedback-log/clear", methods=["POST"])
+def clear_feedback_log():
+    global feedback_log
+    pw = (request.json or {}).get("password", "")
+    if pw != ADMIN_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 403
+    feedback_log = {"entries": []}
+    save_feedback(feedback_log)
+    return jsonify({"success": True})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
